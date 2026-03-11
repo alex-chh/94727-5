@@ -107,7 +107,7 @@ ip addr show  # 確認攻擊機 IP
 | Event ID | 來源 | 檢查重點 | 狀態 |
 |---|---|---|---|
 | **4648** | DC | `AccountName` 為 DC 機器帳號, `TargetServerName` 為攻擊機 IP（DC 被迫向攻擊機發起 NTLM 認證） | [ ] |
-| **4624** | DC | `LogonType` 通常為 3 (Network) | [ ] |
+| **4624** | DC | `LogonType` 通常為 3 (Network) **重要**: PetitPotam 觸發的是隱式網路認證，可能只有 4624 而無 4648 | [ ] |
 
 ### 階段 2: 憑證申請 (AD CS Abuse)
 | Event ID | 來源 | 檢查重點 | 狀態 |
@@ -134,17 +134,21 @@ ip addr show  # 確認攻擊機 IP
 | **4662** | DC | 目錄存取/複寫操作，檢查 `1131f6aa`、`1131f6ad` GUID | [ ] |
 
 ## 6. 常見問題排除
-1. **沒有產生 4886/4887 事件**: 
+1. **只有 4624 沒有 4648（正常現象）**: 
+   - PetitPotam 觸發的是隱式網路認證，只會產生 4624
+   - 4648 需要顯式認證（如 runas /netonly）才會產生
+   - 重點檢查 ntlmrelayx 是否收到認證，而非糾結 4648
+2. **沒有產生 4886/4887 事件**: 
    - 檢查 CA Server 是否開啟稽核: `certsrv.msc` -> 右鍵 CA 名稱 -> 內容 -> 稽核 -> 勾選所有項目。
    - 啟用後需重啟 AD CS 服務。
-2. **Event 4768/4769 沒出現**:
+3. **Event 4768/4769 沒出現**:
    - 確認 DC 的 Group Policy 中 `Audit Kerberos Authentication Service` 和 `Audit Kerberos Service Ticket Operations` 已啟用。
-3. **ntlmrelayx 連接失敗**:
+4. **ntlmrelayx 連接失敗**:
    - 確認 AD CS 網頁註冊功能 (Web Enrollment) 已安裝且路徑正確 (`/certsrv/certfnsh.asp`)。
-4. **AD CS Relay 一直失敗**:
+5. **AD CS Relay 一直失敗**:
    - 檢查 CA/IIS 是否啟用 Extended Protection for Authentication (EPA)。
    - 若已啟用 EPA，Relay 可能被阻擋，需改走其他經核准測試路徑。
-5. **4662 沒出現（DCSync 無記錄）**:
+6. **4662 沒出現（DCSync 無記錄）**:
    - 確認已啟用 `Directory Service Access` 稽核。
    - 確認 DC 上對 `domainDNS` 物件已配置對應 SACL（否則不會產生 4662）。
    - 可用 `auditpol /set /subcategory:"Directory Service Access" /success:enable /failure:enable` 重新啟用後再測。
