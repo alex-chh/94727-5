@@ -33,6 +33,10 @@ NTLM Relay 是一種中間人攻擊。攻擊者不需要知道密碼本身，而
   ↓  
 6. 以高權限票證執行敏感操作（例如遠端執行、或目錄複寫相關動作）達成網域控制等級影響  
 
+## 流程圖（HTML）
+- 檔案：`ntlm_relay_diagram_v2.html`
+- GitHub Raw（可直接用瀏覽器開啟）：https://raw.githubusercontent.com/alex-chh/94727-5/main/ntlm_relay_diagram_v2.html
+
 - 主文件: `NTLM_Relay_Verification.md`
 - 目的: 驗證事件是否產生、是否被 EDR 收集、是否觸發告警
 - 範圍: 僅提供防禦驗證流程與事件核對，不提供可直接濫用的攻擊指令
