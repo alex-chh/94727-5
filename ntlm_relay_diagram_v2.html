@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NTLM Relay Attack Chain v2</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@400;600;700&display=swap');
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background: #080c14;
+  font-family: 'Barlow Condensed', sans-serif;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+}
+
+.wrap {
+  width: 100%;
+  max-width: 960px;
+}
+
+/* ── title ── */
+.title {
+  text-align: center;
+  margin-bottom: 36px;
+}
+.title h1 {
+  font-family: 'Share Tech Mono', monospace;
+  color: #e74c3c;
+  font-size: 1rem;
+  letter-spacing: 5px;
+  text-transform: uppercase;
+}
+.title p {
+  font-family: 'Share Tech Mono', monospace;
+  color: #4a5568;
+  font-size: 0.72rem;
+  letter-spacing: 2px;
+  margin-top: 6px;
+}
+
+/* ── step row ── */
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.step-row {
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  gap: 0 16px;
+  align-items: stretch;
+  min-height: 80px;
+}
+
+/* left column: step number + vertical line */
+.step-num-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.step-circle {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.85rem;
+  font-weight: bold;
+  flex-shrink: 0;
+  border: 2px solid;
+  margin-top: 6px;
+}
+.step-line {
+  width: 2px;
+  flex: 1;
+  margin: 4px auto 0;
+}
+.step-row:last-child .step-line { display: none; }
+
+/* right column: card */
+.step-card {
+  border-radius: 10px;
+  border: 1px solid;
+  padding: 14px 18px;
+  margin-bottom: 12px;
+  position: relative;
+}
+.step-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.step-icon { font-size: 1.4rem; }
+.step-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+.step-body {
+  font-size: 0.82rem;
+  line-height: 1.6;
+  color: #a0aec0;
+}
+.step-body code {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.75rem;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.06);
+}
+
+/* actors row inside card */
+.actors {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.actor {
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.68rem;
+  border: 1px solid;
+}
+.arrow-txt {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.7rem;
+  color: #4a5568;
+}
+
+/* colour themes */
+.c-red    { color:#e74c3c; border-color:#e74c3c; background:rgba(231,76,60,0.08); }
+.c-orange { color:#e67e22; border-color:#e67e22; background:rgba(230,126,34,0.08); }
+.c-blue   { color:#3498db; border-color:#3498db; background:rgba(52,152,219,0.08); }
+.c-green  { color:#2ecc71; border-color:#2ecc71; background:rgba(46,204,113,0.08); }
+.c-purple { color:#9b59b6; border-color:#9b59b6; background:rgba(155,89,182,0.08); }
+.c-gold   { color:#f1c40f; border-color:#f1c40f; background:rgba(241,196,15,0.08); }
+
+.line-red    { background:#e74c3c; }
+.line-orange { background:#e67e22; }
+.line-blue   { background:#3498db; }
+.line-green  { background:#2ecc71; }
+.line-purple { background:#9b59b6; }
+.line-gold   { background:#f1c40f; }
+
+/* tag badge */
+.tag {
+  display: inline-block;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.62rem;
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+/* ── key insight ── */
+.insight {
+  margin-top: 28px;
+  border-radius: 10px;
+  background: rgba(231,76,60,0.06);
+  border: 1px solid rgba(231,76,60,0.3);
+  border-left: 3px solid #e74c3c;
+  padding: 16px 20px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.75rem;
+  color: #a0aec0;
+  line-height: 1.8;
+}
+.insight strong { color: #ff6b6b; }
+
+/* ── correction note ── */
+.correction {
+  margin-top: 14px;
+  border-radius: 10px;
+  background: rgba(241,196,15,0.05);
+  border: 1px solid rgba(241,196,15,0.25);
+  border-left: 3px solid #f1c40f;
+  padding: 14px 20px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.72rem;
+  color: #a0aec0;
+  line-height: 1.8;
+}
+.correction strong { color: #f1c40f; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="title">
+    <h1>⚠ NTLM Relay Attack Chain</h1>
+    <p>// 修正版 v2 · Active Directory + AD CS 濫用 · 中間人攻擊鏈</p>
+  </div>
+
+  <div class="steps">
+
+    <!-- STEP 0 : 前提 -->
+    <div class="step-row">
+      <div class="step-num-col">
+        <div class="step-circle c-orange">0</div>
+        <div class="step-line line-orange"></div>
+      </div>
+      <div class="step-card c-orange">
+        <div class="step-card-header">
+          <span class="step-icon">🔑</span>
+          <span class="step-title">前提條件</span>
+          <span class="tag c-orange">PREREQUISITE</span>
+        </div>
+        <div class="step-body">
+          攻擊者持有一組<strong style="color:#f0a500">低權限域帳號</strong>（非 Domain Admin）。<br>
+          此帳號僅用於觸發 PetitPotam，<strong style="color:#f0a500">無法直接存取高價值資源</strong>。<br>
+          AD CS 必須啟用 <code>Web Enrollment</code>，且未啟用 EPA（Extended Protection for Authentication）。
+        </div>
+        <div class="actors">
+          <span class="actor c-orange">攻擊者</span>
+          <span class="arrow-txt">持有</span>
+          <span class="actor c-orange">lowpriv@domain</span>
+          <span class="arrow-txt">+</span>
+          <span class="actor c-orange">AD CS Web Enrollment 開啟</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 1 : PetitPotam -->
+    <div class="step-row">
+      <div class="step-num-col">
+        <div class="step-circle c-red">1</div>
+        <div class="step-line line-red"></div>
+      </div>
+      <div class="step-card c-red">
+        <div class="step-card-header">
+          <span class="step-icon">📡</span>
+          <span class="step-title">PetitPotam：強制 DC 發起 NTLM 認證</span>
+          <span class="tag c-red">TRIGGER</span>
+        </div>
+        <div class="step-body">
+          攻擊者用低權限帳號呼叫 DC 的 <code>EFS RPC (MS-EFSRPC)</code> 介面，<br>
+          強制 DC 以 <strong style="color:#ff6b6b">DC 機器帳號（DC$）</strong> 身分向攻擊機發起 NTLM 認證。<br>
+          此時 ntlmrelayx 已在攻擊機監聽 Port 445。
+        </div>
+        <div class="actors">
+          <span class="actor c-red">攻擊者</span>
+          <span class="arrow-txt">──EFS RPC──▶</span>
+          <span class="actor c-blue">DC</span>
+          <span class="arrow-txt">──NTLM Auth──▶</span>
+          <span class="actor c-red">攻擊機:445</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 2 : Relay -->
+    <div class="step-row">
+      <div class="step-num-col">
+        <div class="step-circle c-red">2</div>
+        <div class="step-line line-red"></div>
+      </div>
+      <div class="step-card c-red">
+        <div class="step-card-header">
+          <span class="step-icon">🔀</span>
+          <span class="step-title">ntlmrelayx：同步轉發 NTLM 至 AD CS</span>
+          <span class="tag c-red">RELAY（同步）</span>
+        </div>
+        <div class="step-body">
+          ntlmrelayx <strong style="color:#ff6b6b">即時將 DC 的 NTLM Challenge/Response 轉發</strong>至 AD CS HTTP Endpoint。<br>
+          AD CS 驗證通過（誤以為請求來自 DC 本身），允許以 <code>DC$</code> 身分申請憑證。<br>
+          <strong style="color:#ff6b6b">注意：</strong>這是同步操作，ntlmrelayx 作為 MITM 橋接兩端，不是先截獲再轉發。
+        </div>
+        <div class="actors">
+          <span class="actor c-blue">DC</span>
+          <span class="arrow-txt">──NTLM──▶</span>
+          <span class="actor c-red">ntlmrelayx (MITM)</span>
+          <span class="arrow-txt">──同步轉發──▶</span>
+          <span class="actor c-green">AD CS HTTP</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 3 : Certificate -->
+    <div class="step-row">
+      <div class="step-num-col">
+        <div class="step-circle c-green">3</div>
+        <div class="step-line line-green"></div>
+      </div>
+      <div class="step-card c-green">
+        <div class="step-card-header">
+          <span class="step-icon">📜</span>
+          <span class="step-title">AD CS 核發 DC 機器帳號憑證</span>
+          <span class="tag c-green">CERT ISSUED</span>
+        </div>
+        <div class="step-body">
+          AD CS 核發一張以 <strong style="color:#58d68d">DC$ 為主體</strong>的憑證（.pfx / Base64）。<br>
+          ntlmrelayx <strong style="color:#58d68d">直接在攻擊機本地儲存</strong>此憑證，CA 不會主動推送。<br>
+          Event Log：CA 產生 <code>4886</code>（收到申請）、<code>4887</code>（憑證核發），Requester 顯示為 <code>DOMAIN\DC$</code>。
+        </div>
+        <div class="actors">
+          <span class="actor c-green">AD CS</span>
+          <span class="arrow-txt">──核發憑證──▶</span>
+          <span class="actor c-red">ntlmrelayx 儲存</span>
+          <span class="arrow-txt">→</span>
+          <span class="actor c-green">dc.pfx (DC$ 憑證)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 4 : PKINIT -->
+    <div class="step-row">
+      <div class="step-num-col">
+        <div class="step-circle c-purple">4</div>
+        <div class="step-line line-purple"></div>
+      </div>
+      <div class="step-card c-purple">
+        <div class="step-card-header">
+          <span class="step-icon">🎫</span>
+          <span class="step-title">certipy auth：PKINIT 取得 DC$ 的 TGT</span>
+          <span class="tag c-purple">PKINIT</span>
+        </div>
+        <div class="step-body">
+          使用 DC$ 憑證透過 <strong style="color:#bb8fce">PKINIT（憑證式 Kerberos）</strong> 向 KDC 申請 TGT。<br>
+          同時可取得 DC$ 的 <code>NT Hash</code>（透過 U2U 機制）。<br>
+          Event Log：DC 產生 <code>4768</code>，<strong style="color:#bb8fce">PreAuthType = 16</strong>（非一般密碼登入的 2，這是異常特徵）。
+        </div>
+        <div class="actors">
+          <span class="actor c-green">dc.pfx</span>
+          <span class="arrow-txt">──certipy auth──▶</span>
+          <span class="actor c-purple">KDC (DC)</span>
+          <span class="arrow-txt">──TGT──▶</span>
+          <span class="actor c-purple">DC$.ccache + NT Hash</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 5 : S4U2Self -->
+    <div class="step-row">
+      <div class="step-num-col">
+        <div class="step-circle c-purple">5</div>
+        <div class="step-line line-purple"></div>
+      </div>
+      <div class="step-card c-purple">
+        <div class="step-card-header">
+          <span class="step-icon">🎭</span>
+          <span class="step-title">getST.py S4U2Self：模擬 Administrator</span>
+          <span class="tag c-purple">PRIVILEGE ESC</span>
+        </div>
+        <div class="step-body">
+          DC$ 機器帳號天生具有 <code>TrustedToAuthForDelegation</code> 屬性，<br>
+          允許透過 <strong style="color:#bb8fce">S4U2Self</strong> 以自身身分代替任意使用者（如 Administrator）申請 Service Ticket。<br>
+          Event Log：DC 產生 <code>4769</code>，<strong style="color:#bb8fce">TransitedServices 不為空</strong>，AccountName 為機器帳號。
+        </div>
+        <div class="actors">
+          <span class="actor c-purple">DC$.ccache</span>
+          <span class="arrow-txt">──S4U2Self──▶</span>
+          <span class="actor c-purple">KDC</span>
+          <span class="arrow-txt">──▶</span>
+          <span class="actor c-gold">ST: Administrator@cifs/DC</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 6 : Admin Access -->
+    <div class="step-row">
+      <div class="step-num-col">
+        <div class="step-circle c-gold">6</div>
+        <div class="step-line line-gold"></div>
+      </div>
+      <div class="step-card c-gold">
+        <div class="step-card-header">
+          <span class="step-icon">👑</span>
+          <span class="step-title">Domain Admin 完整控制</span>
+          <span class="tag c-gold">PWNED</span>
+        </div>
+        <div class="step-body">
+          使用 Administrator 票證執行 <code>wmiexec / secretsdump (DCSync)</code>，<br>
+          取得 <strong style="color:#f1c40f">krbtgt NT Hash</strong>，可製作 Golden Ticket，永久維持域控制權。<br>
+          Event Log：<code>4624</code> Administrator 登入、<code>4672</code> 特權指派、<code>4662</code> 含複寫 GUID（DCSync）。
+        </div>
+        <div class="actors">
+          <span class="actor c-gold">Administrator.ccache</span>
+          <span class="arrow-txt">──▶</span>
+          <span class="actor c-gold">DCSync</span>
+          <span class="arrow-txt">──▶</span>
+          <span class="actor c-gold">krbtgt Hash → Golden Ticket</span>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /steps -->
+
+  <!-- Key insight -->
+  <div class="insight">
+    <strong>⚡ 核心概念修正：</strong><br>
+    攻擊者需要一組<strong>低權限域帳號</strong>來觸發 PetitPotam，但<strong>不需要任何高權限帳號的密碼</strong>。<br>
+    ntlmrelayx 執行的是<strong>同步 MITM 轉發</strong>，不是先截獲再重放——這也是為何 NTLM Relay 無法被 NTLMv2 本身防禦，必須靠 SMB Signing 或 EPA。
+  </div>
+
+  <div class="correction">
+    <strong>🛡 關鍵防禦措施：</strong><br>
+    • 啟用 <strong>SMB Signing</strong>（防止 SMB Relay）<br>
+    • AD CS 啟用 <strong>EPA（Extended Protection for Authentication）</strong>（防止 HTTP Relay）<br>
+    • 啟用 <strong>LDAP Signing + Channel Binding</strong><br>
+    • 封鎖非 DC 主機對 DC 的 EFS RPC 呼叫（MS-EFSRPC）
+  </div>
+
+</div>
+</body>
+</html>
